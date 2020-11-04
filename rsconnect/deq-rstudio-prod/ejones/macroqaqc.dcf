@@ -1,0 +1,13 @@
+name: macroqaqc
+title: MacroQAQC
+username: ejones
+account: ejones
+server: deq-rstudio-prod
+hostUrl: http://deq-rstudio-prod:3939/__api__
+appId: 114
+bundleId: 573
+url: http://deq-rstudio-prod:3939/content/114/
+when: 1604513615.59051
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: BenthicDataQAQCToolHowTo.Rmd|EPA_QAresults.xlsx|justEssentials.R|masterTaxaGenusODS.csv|masterTaxaGenusPTC.csv|preliminaryMessAround.R|README.md|testBenthicPull.csv|fromBilly/QAQCCalculation2019.xls|fromRick/image.png|fromRick/QA_QC Process_11_7_17 revised 10_7_19.pptx|fromRick/SKM_364e20102813010.pdf|fromRick/testData/2017 7A-D VanWart.xlsx|fromRick/testData/2017 QAQC Pond vs VanWart Draft.xlsx
