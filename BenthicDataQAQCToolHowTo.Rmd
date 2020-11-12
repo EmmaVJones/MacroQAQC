@@ -16,12 +16,15 @@ The `QA Metrics` tab overviews QA metrics run against all internal DEQ QA sample
 ![](www/SFSTCPmetrics.PNG)
 
 
-PTC_QA represents the Percent Taxonomic Completeness (PTC) score of the QA sample while PTC_O represents the PTC score of the original sample. PTCabs is the absolute difference between these two PTC scores. (SFSTCP reference Year)
+PTC_QA represents the Percent Taxonomic Completeness (PTC) score of the QA sample while PTC_O represents the PTC score of the original sample. PTCabs is the absolute difference between these two PTC scores. (SFS)
 
 The `QA Results` tab allows users to compare QA results for each station identified by the drop down select box. Once a station is selected, the `DEQ Taxa Comparison` table lines up the DEQ internal QA sample and original sample and calculates agreements, differences, and PTC scores. If EPA QA data is available for a selected station, the `EPA Taxa Comparison` table will appear with the same information listed above run against the EPA QA sample and original DEQ sample.
 
 The `Download Results` tab allows users to download MS Excel workbooks of DEQ QA and EPA QA results and metrics.
 
-#### References
+<br><br>
 
-Society for Freshwater Science Taxonomic Certification Program. Year???. *Quality Control Procedure for Sample-Based Taxonomic Data*. URL???
+
+### References
+
+Society for Freshwater Science Taxonomic Certification Program. *Quality Control Procedure for Sample-Based Taxonomic Data*. http://3jgs2o4a02n22u73bi2gnd3l-wpengine.netdna-ssl.com/wp-content/uploads/taxonomic-data-qc-guidelines.pdf. 

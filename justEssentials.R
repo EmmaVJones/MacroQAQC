@@ -82,7 +82,7 @@ organizeTaxaLists <- function(singleQAdataset, # data from one StationID
                               masterTaxaGenus # with PTC addition
 ){
   left_join(singleQAdataset, dplyr::select(masterTaxaGenus, Order, Family, FinalID, PTCscore )) %>%
-    dplyr::select(Order, Family, FinalID, PTCscore, BenSampID, Individuals) %>%
+    dplyr::select(StationID, Order, Family, FinalID, PTCscore, BenSampID, Individuals) %>%
     pivot_wider(names_from = BenSampID, values_from = Individuals) %>%
     replace(is.na(.), 0) %>% # change any NAs to 0
     mutate_if(is.character, list(~na_if(., 0))) %>% # but that messes up any NAs in Order/family so change those back
@@ -92,8 +92,8 @@ organizeTaxaLists <- function(singleQAdataset, # data from one StationID
 reformatForQA <- function(x, QAtype){
   # reformat data to match expected format
   x %>% 
-    dplyr::select(Order, Family, FinalID, PTCscore, QAsample = starts_with(QAtype), everything()) %>% # reorganize columns and rename for consistency
-    rename( Sample =  !!names(.[6])) %>%
+    dplyr::select(StationID, Order, Family, FinalID, PTCscore, QAsample = starts_with(QAtype), everything()) %>% # reorganize columns and rename for consistency
+    rename( Sample =  !!names(.[7])) %>%
     filter(QAsample > 0 | Sample > 0) %>%
     rowwise() %>%
     mutate(Difference = abs(QAsample - Sample),
@@ -104,7 +104,7 @@ reformatForQA <- function(x, QAtype){
 }
 
 
-QAsummaryMetrics <- function(x, QAsample, Sample){
+QAsummaryMetrics <- function(x, QAsample, Sample, StationID){
   summarise(x, 
             PTD = (1 - (sum(Agreement) / sum(QAsample))) * 100, # percent taxonomic disagreement
             PTA = 100 - PTD, # percent taxonomic agreement
@@ -112,9 +112,10 @@ QAsummaryMetrics <- function(x, QAsample, Sample){
             PTC_QA = (sum(PTC_QA, na.rm = T) / sum(QAsample)) * 100, #(sum((QAsample * PTCscore)/QAsample))),
             PTC_O = (sum(PTC_O, na.rm = T) / sum(Sample)) * 100,
             PTCabs = abs(PTC_QA - PTC_O)) %>% # absolute difference in PTC between QA sample and Sample sample
-    mutate(QAsample = !!QAsample,
-           Sample = !!Sample) %>%
-    dplyr::select(QAsample, Sample, everything())
+    mutate(QAsample = !! QAsample,
+           Sample = !! Sample,
+           StationID = !! StationID) %>%
+    dplyr::select(StationID, QAsample, Sample, everything())
 }
 
 
@@ -125,22 +126,23 @@ QAQCmasterFunction <- function(organizedDataset){
   EPAQAsampleData <- dplyr::select(organizedDataset, -starts_with('QAQC'))
   
   # keep sample names for later
+  StationID <- dplyr::select(organizedDataset, StationID) %>% slice_head() %>% pull()
   QAsample <- dplyr::select(organizedDataset, starts_with('QAQC')) %>% names()
   EPAQAsample <- dplyr::select(organizedDataset, starts_with('EPAQAQC')) %>% names() # will only populate if exists
-  Sample <- dplyr::select(organizedDataset, -c(Order, Family, FinalID, PTCscore, starts_with('QAQC'), starts_with('EPAQAQC'))) %>% names()
+  Sample <- dplyr::select(organizedDataset, -c(StationID, Order, Family, FinalID, PTCscore, starts_with('QAQC'), starts_with('EPAQAQC'))) %>% names()
   
-  if(ncol(QAsampleData) == 6){ # if there is a QA and sample to analyze
+  if(ncol(QAsampleData) == 7){ # if there is a QA and sample to analyze
     QAdata <- reformatForQA(QAsampleData, "QAQC")
-    QAmetrics <- QAsummaryMetrics(QAdata, QAsample, Sample) 
+    QAmetrics <- QAsummaryMetrics(QAdata, QAsample, Sample, StationID) 
     # fix QAdata names before returning to user
     QAdata <- rename(QAdata, !!QAsample := QAsample,
                      !!Sample := Sample)
     QAoutput <- list(QAdata = QAdata,  QAmetrics = QAmetrics)
   }
   
-  if(ncol(EPAQAsampleData) == 6){ # if there is a EPAQA and sample to analyze
+  if(ncol(EPAQAsampleData) == 7){ # if there is a EPAQA and sample to analyze
     EPAQAdata <- reformatForQA(EPAQAsampleData, "EPAQAQC")
-    EPAQAmetrics <- QAsummaryMetrics(EPAQAdata, EPAQAsample, Sample) 
+    EPAQAmetrics <- QAsummaryMetrics(EPAQAdata, EPAQAsample, Sample, StationID) 
     # fix QAdata names before returning to user
     EPAQAdata <- rename(EPAQAdata, !!EPAQAsample := QAsample,
                         !!Sample := Sample)
@@ -168,6 +170,9 @@ QAQCmasterFunction_df <- function(x, # pulled benthic data
 masterTaxaGenus <- pin_get("ejones/masterTaxaGenus", board = "rsconnect") %>%
   mutate(PTCscore = ifelse(FinalID == Genus | FinalID == Species, 1, 0)) # helper to flag when taxonomist ID's sample to desired level
 
+family <- filter(masterTaxaGenus, FinalID == `Final VA Family ID`)
+
+# pull some real data and some fake data, adjust the QAQCEPA code to newer EPAQAQC 
 x <- pullQAQCsample(pool, tibble(StationID = c('2AXEM000.35', '2-TLR000.03'),
                                  `Collection Date` = c("2016-10-20 11:00:00",
                                                        "2016-05-04 09:30:00"))) %>%

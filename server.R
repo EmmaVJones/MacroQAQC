@@ -111,12 +111,27 @@ shinyServer(function(input, output, session) {
                                scrollY = "300px", buttons=list('copy','colvis'),
                                pageLength=nrow(reactive_objects$DEQQAresults[[input$stationSelection]])))})
   
+  # metric results underneath sample
+  output$DEQstationLineupMetrics <- DT::renderDataTable({req(reactive_objects$DEQQAmetrics, input$stationSelection)
+    z <- filter(reactive_objects$DEQQAmetrics, StationID %in% input$stationSelection)
+    DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 't', scrollX=TRUE)) })
+  
+  
   output$EPAstationLineup <- DT::renderDataTable({req(reactive_objects$EPAQAresults, input$stationSelection)
     DT::datatable(reactive_objects$EPAQAresults[[input$stationSelection]],
                   escape=F, rownames = F, extensions = 'Buttons',
                   options=list(dom = 'Bft', scrollX=TRUE,
                                scrollY = "300px", buttons=list('copy','colvis'),
                                pageLength=nrow(reactive_objects$EPAQAresults[[input$stationSelection]])))})
+  
+  
+  # metric results underneath sample
+  output$EPAstationLineupMetrics <- DT::renderDataTable({req(reactive_objects$EPAQAmetrics, input$stationSelection)
+    z <- filter(reactive_objects$EPAQAmetrics, StationID %in% input$stationSelection)
+    DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 't', scrollX=TRUE)) })
+  
   
   ##### Main Panel- Download Results Tab Panel
   
