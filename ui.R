@@ -1,4 +1,4 @@
-shinyUI(fluidPage(theme= "yeti.css",
+shinyUI(fluidPage(#theme= "yeti.css",
                   navbarPage("Benthic Data QAQC Tool",
                              
                              tabPanel('How To',

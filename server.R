@@ -12,7 +12,7 @@ shinyServer(function(input, output, session) {
   
   # Get master taxa data from weekly pin update
   observe({
-    reactive_objects$masterTaxaGenus <- masterTaxaGenus <- pin_get("ejones/masterTaxaGenus", board = "rsconnect") %>%
+    reactive_objects$masterTaxaGenus <- pin_get("ejones/masterTaxaGenus", board = "rsconnect") %>%
       mutate(PTCscore = ifelse(FinalID == Genus | FinalID == Species, 1, 0)) # helper to flag when taxonomist ID's sample to desired level
   })
   
@@ -35,17 +35,19 @@ shinyServer(function(input, output, session) {
   
   # Display user input data
   output$uploadedStationTable <- DT::renderDataTable({req(inputStations())
-    DT::datatable(inputStations() %>% mutate(`Collection Date` = as.character(`Collection Date`)),
+    DT::datatable(inputStations() %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
+                    arrange(StationID),
                   escape=F, rownames = F,
                   options=list(dom = 't', scrollY = "200px",pageLength=nrow(inputStations())))})
   
   # Pull Benthic Data from CEDS
   observeEvent(inputStations(), {
     ## Benthic Information
-    reactive_objects$benthics <- #pullQAQCsample(pool, inputStations()) })
-      
-      # for testing
-      read_csv('testData.csv') })
+    reactive_objects$benthics <- pullQAQCsample(pool, inputStations()) %>%
+      arrange(StationID)})
+      #
+      ## for testing
+      #read_csv('testData.csv') })
       
       
   observeEvent(reactive_objects$benthics, {

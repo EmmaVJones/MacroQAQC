@@ -5,6 +5,8 @@ library(config)
 library(pins)
 library(lubridate)
 library(openxlsx)
+conn <- config::get("connectionSettings")
+
 
 
 ## For testing: connect to ODS production using local credentials
@@ -158,7 +160,15 @@ QAQCmasterFunction_df <- function(x, # pulled benthic data
   out <- list()
   for(i in unique(x$StationID)){
     x1 <- organizeTaxaLists(filter(x, StationID %in% i), masterTaxaGenus) 
-    out[[i]] <- QAQCmasterFunction(x1)
+    if(ncol(x1) > 6){
+      out[[i]] <- QAQCmasterFunction(x1)
+    } else { # means no QA data yet
+      out[[i]] <- list(QAdata = x1,
+                       QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
+                         slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
+                         dplyr::select(StationID, QAsample, Sample, everything()) )
+    }
+    
   }
   return(out)
 }
@@ -218,4 +228,7 @@ EPAQAresults <- purrr::map(EPAQAresults, ~ purrr::compact(.)) %>%
 openxlsx::write.xlsx(EPAQAresults, file = "EPA_QAresults.xlsx")
 
 
-
+# New test data in CEDS
+samples <- read_csv('data/template.csv')
+testData <- pullQAQCsample(pool, samples)
+results <- QAQCmasterFunction_df(testData, masterTaxaGenus)
