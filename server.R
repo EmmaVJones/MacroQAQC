@@ -34,8 +34,9 @@ shinyServer(function(input, output, session) {
   ##### Main Panel- Data Retrieved Tab Panel
   
   # Display user input data
-  output$uploadedStationTable <- DT::renderDataTable({req(inputStations())
+  output$uploadedStationTable <- DT::renderDataTable({req(inputStations(), reactive_objects$benthics)
     DT::datatable(inputStations() %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
+                    left_join(reactive_objects$benthicsSummary, by = 'StationID') %>%
                     arrange(StationID),
                   escape=F, rownames = F,
                   options=list(dom = 't', scrollY = "200px",pageLength=nrow(inputStations())))})
@@ -51,6 +52,16 @@ shinyServer(function(input, output, session) {
       
       
   observeEvent(reactive_objects$benthics, {
+    # benthics Summary
+    reactive_objects$benthicsSummary <- reactive_objects$benthics %>%
+      group_by(StationID) %>%
+      summarize(BenSampID) %>%
+      distinct(BenSampID, .keep_all = T) %>%
+      mutate(Type = case_when(str_detect(BenSampID, "^QAQC") ~ "QA Sample",
+                              str_detect(BenSampID, "^EPAQAQC") ~ "EPA QA Sample",
+                              TRUE~ as.character('Original Sample') )) %>%
+      pivot_wider(names_from = Type, values_from = BenSampID)
+    
     ## QA results
     reactive_objects$QAanalysis <- QAQCmasterFunction_df(reactive_objects$benthics, reactive_objects$masterTaxaGenus)
     # list of tibbles with benthic comparisons
@@ -71,7 +82,8 @@ shinyServer(function(input, output, session) {
   
   # Display data retrieved from CEDS
   output$benthicData <- DT::renderDataTable({req(reactive_objects$benthics)
-    DT::datatable(reactive_objects$benthics %>% mutate(`Collection Date` = as.character(`Collection Date`)),
+    DT::datatable(reactive_objects$benthics %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
+                    dplyr::select(StationID, BenSampID, `Collection Date`, everything()),
                   escape=F, rownames = F, extensions = 'Buttons',
                   options=list(dom = 'Bft', scrollY = "400px", buttons=list('copy','colvis'),
                                pageLength=nrow(reactive_objects$benthics)))})
