@@ -15,13 +15,13 @@ board_register_rsconnect(key = conn$CONNECT_API_KEY,  #Sys.getenv("CONNECT_API_K
 
 
 ## For testing: connect to ODS production using local credentials
-#pool <- dbPool(
+# pool <- dbPool(
 #  drv = odbc::odbc(),
-#  Driver = "SQL Server Native Client 11.0", 
+#  Driver =  "ODBC Driver 11 for SQL Server",#Driver = "SQL Server Native Client 11.0",
 #  Server= "DEQ-SQLODS-PROD,50000",
 #  dbname = "ODS",
 #  trusted_connection = "yes"
-#)
+# )
 
 # Set up pool connection to production environment
 pool <- dbPool(
@@ -30,7 +30,7 @@ pool <- dbPool(
   # Production Environment
   Server= "DEQ-SQLODS-PROD,50000",
   dbname = "ODS",
-  UID = conn$UID_prod, 
+  UID = conn$UID_prod,
   PWD = conn$PWD_prod,
   #UID = Sys.getenv("userid_production"), # need to change in Connect {vars}
   #PWD = Sys.getenv("pwd_production")   # need to change in Connect {vars}
@@ -53,6 +53,38 @@ template <- read_csv('data/template.csv')
 
 # Necessary Functions
 
+# identify data issues before proceeding to full query
+queryPreCheck <- function(poolName, rickInputDF){
+  # first make sure datetime correct
+  dateIssues <- filter(rickInputDF, str_detect(`Collection Date`, '-')) %>% # find dates in - format not /
+    mutate(`Potential Issue` = 'Date uses - not / as separator')
+  timeIssues <- filter(rickInputDF, str_detect(`Collection Date`, ':', negate = TRUE)) %>% # find times without :
+    mutate(`Potential Issue` = 'Time does not have appropriate separator ( : )')
+  
+  # remove sites with known issues
+  querySites <- filter(rickInputDF, ! StationID %in% dateIssues$StationID) %>%
+    filter( ! StationID %in% timeIssues$StationID)
+  
+  # Test query
+  if(nrow(querySites) > 0){
+    benSamps <- poolName %>% tbl("Edas_Benthic_Sample_View") %>%
+      filter(STA_ID %in% !! toupper(querySites$StationID) &
+               FDT_DATE_TIME %in% !! querySites$`Collection Date` &
+               WBS_REP_NUM %in% !! querySites$RepNum) %>%
+      as_tibble()
+    
+    # make sure all stations that were supposed to return data do
+    missingData <- filter(querySites, ! StationID %in% benSamps$STA_ID) %>%
+      mutate(`Potential Issue` = 'No data in CEDS with the StationID, Collection Date/Time, and RepNum combination')
+    
+    return(bind_rows(dateIssues, timeIssues) %>%
+             bind_rows(missingData))
+    
+  } else { return(bind_rows(dateIssues, timeIssues)) }
+  
+}
+
+# Pull CEDS data
 pullQAQCsample <- function(poolName, rickInputDF){
   benSamps <- poolName %>% tbl("Edas_Benthic_Sample_View") %>%
     filter(STA_ID %in% !! toupper(rickInputDF$StationID) &
@@ -112,6 +144,49 @@ pullQAQCsample <- function(poolName, rickInputDF){
              Gradient = as.character(NA), `Target Count` = as.numeric(NA),  Season = as.character(NA)) )
   }
 }
+
+
+# double check data is correctly entered in CEDS before doing QA
+QAdataEntry <- function(realData, realSites){
+  
+  dataOut <- realData[0,]
+  problemDataOut <- tibble(StationID = NA, Problem = NA)
+  
+  # now get appropriate samples based on Rick's Rep Number and anything with a rep num > 10
+  for(i in unique(realSites$StationID)){
+    print(i)
+    z <- filter(realData, StationID == i) 
+    repToQA <- filter(realSites, StationID == i)$RepNum
+    
+    # Rick's desired RepNum in CEDS
+    if(repToQA %in% z$RepNum){
+      # Rick's desired RepNum in CEDS AND some sort of QA sample entered
+      if(nrow(filter(z, RepNum > 10)) > 0 ){
+        # Rick's desired RepNum in CEDS AND QA sample entered correctly
+        if(nrow(filter(z, RepNum %in% c(repToQA + 10, repToQA + 20))) > 0 ){
+          # output only desired data for QA
+          dataPasses <- filter(z, RepNum %in% repToQA | RepNum > 10)
+          problemData <- tibble(StationID = NA, Problem = NA)
+        } else {
+          dataPasses <- realData[0,]
+          problemData <- tibble(StationID = unique(z$StationID),
+                                Problem = 'QA RepNum incorrectly entered') }
+      } else {    # Rick's desired RepNum in CEDS but no QA sample (determined by RepNum > 10) in CEDS
+        dataPasses <- realData[0,]
+        problemData <- tibble(StationID = unique(z$StationID),
+                              Problem = 'No data with RepNum > 10, QA RepNum data either incorrectly entered or not entered at all') }
+    } else { # Rick's desired RepNum NOT in CEDS
+      dataPasses <- realData[0,]
+      problemData <- tibble(StationID = unique(z$StationID),
+                            Problem = 'No data for desired RepNum in CEDS')   }
+    
+    dataOut <- bind_rows(dataOut, dataPasses)
+    problemDataOut <- bind_rows(problemDataOut, problemData)
+  }
+  problemDataOut <- drop_na(problemDataOut)
+  finalDataOut <- list(cleanData = dataOut, problemData = problemDataOut)
+}
+
 
 organizeTaxaLists <- function(singleQAdataset, # data from one StationID
                               masterTaxaGenus # with PTC addition
@@ -192,6 +267,7 @@ QAQCmasterFunction_df <- function(x, # pulled benthic data
                                   masterTaxaGenus){
   out <- list()
   for(i in unique(x$StationID)){
+    print(i)
     x1 <- organizeTaxaLists(filter(x, StationID %in% i), masterTaxaGenus) 
     if(ncol(x1) > 6){
       out[[i]] <- QAQCmasterFunction(x1)

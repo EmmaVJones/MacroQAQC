@@ -1,6 +1,8 @@
 ---
 title: "Benthic Data QAQC Tool How To"
-output: html_document
+output: 
+  html_document:
+    theme: yeti
 ---
 
 ```{r setup, include=FALSE}
@@ -9,7 +11,9 @@ knitr::opts_chunk$set(echo = FALSE)
 
 This tool is intended to pull benthic data and run QA metrics. After navigating to the `QA Tool` tab, users can upload a spreadsheet of stations for analysis on the left side of the page. The query will pull directly from CEDS based on stations and dates identified in the uploaded .csv spreadsheet. All data uploaded to the application must comply with the specified template. A sample template is available for download by clicking the `Download template.csv` button.
 
-Once a .csv spreadsheet of stations and sample dates are uploaded to the application, the application will automatically begin to query CEDS for the associated benthic taxa and sample information. The `Data Retrieved` tab will display the spreadsheet uploaded to the application and any benthic data retrieved based on the uploaded station/date combinations. 
+Once a .csv spreadsheet of stations and sample dates are uploaded to the application, the application will identify any stations from the uploaded template that have formatting issues or may be lacking data in CEDS to report on in the `Data Precheck` tab. These potential issues are listed for the reviewer and are subsequently removed from further analyses. The user should follow the suggested fixes and re-upload the corrected data if they wish to QA that station.
+
+The `Data Retrieved` tab will display the data queried from CEDS exactly as it is stored in the data warehouse. Below the raw data, there is a CEDS QA Assistance table that identifies any data that may have been entered into CEDS incorrectly as well as potential fixes. These station will be removed from futher analysis until the data issues are resolved. It is up to the reviewer to work with Biologists to correct this information on the database side. At the bottom of the page is a table that identifies all benthic data that is fit for QA analysis in subsequent modules of this application. 
 
 The `QA Metrics` tab overviews QA metrics run against all internal DEQ QA samples (BenSampID's beginning with QAQC) and EPA QA samples (BenSampID's beginning with EPAQAQC). The following metrics are run by the tool:
 
