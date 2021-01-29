@@ -12,7 +12,7 @@ conn <- config::get("connectionSettings")
 ## For testing: connect to ODS production using local credentials
 pool <- dbPool(
   drv = odbc::odbc(),
-  Driver = "SQL Server Native Client 11.0", 
+  Driver =  "ODBC Driver 11 for SQL Server",#Driver = "SQL Server Native Client 11.0",
   Server= "DEQ-SQLODS-PROD,50000",
   dbname = "ODS",
   trusted_connection = "yes"
@@ -194,6 +194,7 @@ x <- pullQAQCsample(pool, tibble(StationID = c('2AXEM000.35', '2-TLR000.03'),
 
 x1 <- organizeTaxaLists(x, masterTaxaGenus) #%>%
 
+
   
 results <- QAQCmasterFunction_df(x, masterTaxaGenus)
 
@@ -232,3 +233,13 @@ openxlsx::write.xlsx(EPAQAresults, file = "EPA_QAresults.xlsx")
 samples <- read_csv('data/template.csv')
 testData <- pullQAQCsample(pool, samples)
 results <- QAQCmasterFunction_df(testData, masterTaxaGenus)
+
+
+# Test real data 
+realSites <- read_csv('fromRick/realData/2020QA_EVJ.csv')[2:5,]
+realData <- pullQAQCsample(pool, realSites)
+results <- QAQCmasterFunction_df(realData, masterTaxaGenus)
+
+realSitesRep <- read_csv('fromRick/realData/2020QA_EVJ.csv')
+realDataRep <- pullQAQCsample(pool, realSitesRep)
+resultsRep <- QAQCmasterFunction_df(realDataRep, masterTaxaGenus)
