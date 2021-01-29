@@ -8,7 +8,7 @@ shinyServer(function(input, output, session) {
   ##################################### How to page
   output$BenthicDataQAQCToolHowTo <- renderUI({includeHTML("BenthicDataQAQCToolHowTo.html")})
   
-  output$BenthicQueryToolHowTo <- renderUI({includeHTML("BenthicQueryToolHowTo.html")})
+  #output$BenthicQueryToolHowTo <- renderUI({includeHTML("BenthicQueryToolHowTo.html")})
   
   # Get master taxa data from weekly pin update
   observe({
@@ -31,27 +31,69 @@ shinyServer(function(input, output, session) {
     return(NULL)
   read_csv(inFile$datapath) })
   
-  ##### Main Panel- Data Retrieved Tab Panel
+  ##### Main Panel- Data PreCheck Tab Panel
   
   # Display user input data
-  output$uploadedStationTable <- DT::renderDataTable({req(inputStations(), reactive_objects$benthics)
+  output$uploadedStationTable <- DT::renderDataTable({req(inputStations())#, reactive_objects$benthics)
     DT::datatable(inputStations() %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
-                    left_join(reactive_objects$benthicsSummary, by = 'StationID') %>%
+                    #left_join(reactive_objects$benthicsSummary, by = 'StationID') %>%
                     arrange(StationID),
                   escape=F, rownames = F,
-                  options=list(dom = 't', scrollY = "200px",pageLength=nrow(inputStations())))})
+                  options=list(dom = 'it', scrollY = "200px",pageLength=nrow(inputStations())))})
+  
+  # check uploaded data for issues
+  issueSites <- reactive({req(inputStations())
+    queryPreCheck(pool, inputStations()) %>% arrange(StationID)})
+  
+  output$issuesTable <-  DT::renderDataTable({req(issueSites())
+    DT::datatable(issueSites(), escape=F, rownames = F,
+                  options=list(dom = 'it', scrollY = "200px",pageLength=nrow(issueSites())))})
+  
+  output$stationsForQATable <- DT::renderDataTable({req(issueSites())
+    z <- filter(inputStations(),! StationID %in% issueSites()$StationID) %>%
+      arrange(StationID)
+    DT::datatable(z, escape=F, rownames = F,
+                  options=list(dom = 'it', scrollY = "200px",pageLength=nrow(z)))})
+  
+  
+  ##### Main Panel- Data Retrieved Tab Panel
   
   # Pull Benthic Data from CEDS
-  observeEvent(inputStations(), {
+  observeEvent(issueSites(), {
     ## Benthic Information
-    reactive_objects$benthics <- pullQAQCsample(pool, inputStations()) %>%
+    reactive_objects$preliminaryBenthics <- pullQAQCsample(pool, filter(inputStations(),! StationID %in% issueSites()$StationID)) %>%
       arrange(StationID)})
-      #
-      ## for testing
-      #read_csv('testData.csv') })
+  
+  # Display data retrieved from CEDS
+  output$benthicData <- DT::renderDataTable({req(reactive_objects$preliminaryBenthics)
+    DT::datatable(reactive_objects$preliminaryBenthics %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
+                    dplyr::select(StationID, BenSampID, `Collection Date`, everything()),
+                  escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bift', scrollY = "400px", buttons=list('copy','colvis'),
+                               pageLength=nrow(reactive_objects$preliminaryBenthics)))})
+  
+  # Identify CEDS data entry issues
+  CEDSdataIssues <- reactive({req(reactive_objects$preliminaryBenthics)
+    QAdataEntry(reactive_objects$preliminaryBenthics, inputStations()) })
+  
+  # Display CEDS data entry issues
+  output$CEDSdataEntryTable <- DT::renderDataTable({req(CEDSdataIssues())
+    DT::datatable(CEDSdataIssues()$problemData %>% arrange(StationID),
+                  escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bit', scrollY = "400px", buttons=list('copy','colvis'),
+                               pageLength=nrow(CEDSdataIssues()$problemData)))})
       
-      
-  observeEvent(reactive_objects$benthics, {
+  # Display data retrieved from CEDS
+  output$benthicDataForQA <- DT::renderDataTable({req(reactive_objects$benthics)
+    DT::datatable(reactive_objects$benthics, escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bift', scrollY = "400px", buttons=list('copy','colvis'),
+                               pageLength=nrow(reactive_objects$benthics)))})
+  
+  
+  observeEvent(CEDSdataIssues(), {
+    # Remoe issue sites from benthic information for review
+    reactive_objects$benthics <- CEDSdataIssues()$cleanData %>% arrange(StationID)
+
     # benthics Summary
     reactive_objects$benthicsSummary <- reactive_objects$benthics %>%
       group_by(StationID) %>%
@@ -61,7 +103,7 @@ shinyServer(function(input, output, session) {
                               str_detect(BenSampID, "^EPAQAQC") ~ "EPA QA Sample",
                               TRUE~ as.character('Original Sample') )) %>%
       pivot_wider(names_from = Type, values_from = BenSampID)
-    
+
     ## QA results
     reactive_objects$QAanalysis <- QAQCmasterFunction_df(reactive_objects$benthics, reactive_objects$masterTaxaGenus)
     # list of tibbles with benthic comparisons
@@ -70,85 +112,85 @@ shinyServer(function(input, output, session) {
     # tibbles of QA metric information
     reactive_objects$DEQQAmetrics <- map_df(reactive_objects$QAanalysis, "QAmetrics")
     reactive_objects$EPAQAmetrics <- map_df(reactive_objects$QAanalysis, "EPAQAmetrics")
-    
+
     # for data download
     reactive_objects$DEQQAresultsOUT <- reactive_objects$DEQQAresults
     reactive_objects$DEQQAresultsOUT[["QAmetrics"]] <- reactive_objects$DEQQAmetrics # add metrics df to QAresults structure
     reactive_objects$EPAQAresultsOUT <- reactive_objects$EPAQAresults
     reactive_objects$EPAQAresultsOUT[["EPAQAmetrics"]] <- reactive_objects$EPAQAmetrics # add metrics df to QAresults structure
-    reactive_objects$EPAQAresultsOUT <- purrr::map(reactive_objects$EPAQAresultsOUT, ~ purrr::compact(.)) %>% 
+    reactive_objects$EPAQAresultsOUT <- purrr::map(reactive_objects$EPAQAresultsOUT, ~ purrr::compact(.)) %>%
       purrr::keep(~length(.) != 0) # only send out objects with data
   })
-  
-  # Display data retrieved from CEDS
-  output$benthicData <- DT::renderDataTable({req(reactive_objects$benthics)
-    DT::datatable(reactive_objects$benthics %>% mutate(`Collection Date` = as.character(`Collection Date`)) %>%
-                    dplyr::select(StationID, BenSampID, `Collection Date`, everything()),
-                  escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 'Bft', scrollY = "400px", buttons=list('copy','colvis'),
-                               pageLength=nrow(reactive_objects$benthics)))})
+
   
   ##### Main Panel- QA Metrics Tab Panel
   
+  output$QAStationTable <- DT::renderDataTable({req(inputStations(), reactive_objects$benthics)
+    DT::datatable(reactive_objects$benthicsSummary %>%
+                    arrange(StationID), escape=F, rownames = F,
+                  options=list(dom = 'it', scrollY = "200px",pageLength=nrow(reactive_objects$benthicsSummary)))})
+  
+  
   ## DEQ metrics table
-  output$DEQresults <- DT::renderDataTable({req(reactive_objects$DEQQAmetrics)
+  output$DEQresults <- DT::renderDataTable({req(nrow(reactive_objects$DEQQAmetrics) > 0)
     DT::datatable(reactive_objects$DEQQAmetrics,
                   escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 'Bft', scrollX=TRUE,
+                  options=list(dom = 'Bift', scrollX=TRUE,
                                scrollY = "200px", buttons=list('copy','colvis'),
                                pageLength=nrow(reactive_objects$DEQQAmetrics))) %>%
       DT::formatRound(columns=c('PTD', 'PTA', "PDE", "PTC_QA", "PTC_O", "PTCabs"), digits=2)})
-  
+
   ## EPA metrics table
-  output$EPAresults <- DT::renderDataTable({req(reactive_objects$EPAQAmetrics)
+  output$EPAresults <- DT::renderDataTable({req(nrow(reactive_objects$EPAQAmetrics) > 0)
     DT::datatable(reactive_objects$EPAQAmetrics,
                   escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 'Bft', scrollX=TRUE,
+                  options=list(dom = 'Bift', scrollX=TRUE,
                                scrollY = "200px", buttons=list('copy','colvis'),
                                pageLength=nrow(reactive_objects$EPAQAmetrics))) %>%
       DT::formatRound(columns=c('PTD', 'PTA', "PDE", "PTC_QA", "PTC_O", "PTCabs"), digits=2)})
-  
-  
+
+
   ##### Main Panel- QA Results Tab Panel
-  
-  output$stationSelectionUI <- renderUI({
-    req(reactive_objects$DEQQAresults)
+
+  output$stationSelectionUI <- renderUI({req(reactive_objects$DEQQAresults)
     selectInput('stationSelection', 'Select StationID to analyze', choices = names(reactive_objects$DEQQAresults)) })
-  
+
   ## DEQ Taxa Comparison table
   
-  #output$DEQstationLineup <- renderPrint({reactive_objects$DEQQAresults[[input$stationSelection]]})
+  output$testtest <- renderPrint({reactive_objects$DEQQAresults[[input$stationSelection]]})
+
   output$DEQstationLineup <- DT::renderDataTable({req(reactive_objects$DEQQAresults, input$stationSelection)
-    DT::datatable(reactive_objects$DEQQAresults[[input$stationSelection]],
-                  escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 'Bft', scrollX=TRUE,
+    z <- reactive_objects$DEQQAresults[[input$stationSelection]]
+    DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bift', scrollX=TRUE,
                                scrollY = "300px", buttons=list('copy','colvis'),
-                               pageLength=nrow(reactive_objects$DEQQAresults[[input$stationSelection]])))})
-  
+                               pageLength=nrow(z))) })
+
   # metric results underneath sample
-  output$DEQstationLineupMetrics <- DT::renderDataTable({req(reactive_objects$DEQQAmetrics, input$stationSelection)
+  output$DEQstationLineupMetrics <- DT::renderDataTable({req(nrow(reactive_objects$DEQQAmetrics) > 0, input$stationSelection)
     z <- filter(reactive_objects$DEQQAmetrics, StationID %in% input$stationSelection)
     DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 't', scrollX=TRUE)) })
-  
-  
+                  options=list(dom = 'it', scrollX=TRUE)) })
+
+
   output$EPAstationLineup <- DT::renderDataTable({req(reactive_objects$EPAQAresults, input$stationSelection)
-    DT::datatable(reactive_objects$EPAQAresults[[input$stationSelection]],
-                  escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 'Bft', scrollX=TRUE,
-                               scrollY = "300px", buttons=list('copy','colvis'),
-                               pageLength=nrow(reactive_objects$EPAQAresults[[input$stationSelection]])))})
-  
-  
+    z <- reactive_objects$EPAQAresults[[input$stationSelection]]
+    DT::datatable(z,escape=F, rownames = F, extensions = 'Buttons',
+                    options=list(dom = 'Bift', scrollX=TRUE,
+                                 scrollY = "300px", buttons=list('copy','colvis'),
+                                 pageLength=nrow(z)))   })
+
+
   # metric results underneath sample
-  output$EPAstationLineupMetrics <- DT::renderDataTable({req(reactive_objects$EPAQAmetrics, input$stationSelection)
-    z <- filter(reactive_objects$EPAQAmetrics, StationID %in% input$stationSelection)
-    DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
-                  options=list(dom = 't', scrollX=TRUE)) })
-  
-  
+  output$EPAstationLineupMetrics <- DT::renderDataTable({req(nrow(reactive_objects$EPAQAmetrics) > 0, input$stationSelection)
+      z <- filter(reactive_objects$EPAQAmetrics, StationID %in% input$stationSelection)
+      DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
+                    options=list(dom = 'it', scrollX=TRUE)) })
+    
+
+
   ##### Main Panel- Download Results Tab Panel
-  
+
   # Don't let user click pull data button if no data to download
   #observe({
   #  shinyjs::toggleState('downloadDEQResults', length(reactive_objects$DEQQAresultsOUT) == 0 )
