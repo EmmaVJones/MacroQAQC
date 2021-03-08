@@ -21,7 +21,7 @@ pool <- dbPool(
 
 
 # Test real data 
-realSites <- read_csv('fromRick/realData/2020QA_EVJ.csv')# %>%
+realSites <- read_csv('fromRick/realData/2019 Pond QAQC.csv')#read_csv('fromRick/realData/2020QA_EVJ.csv')# %>%
   # for testing
   #filter(StationID %in% c('2-OTC001.54', '2-PCT002.46', '8-MPN075.84','7-FRB001.94','4ALOA000.62', '3-RAP082.43',
   #                        '4AGEO006.73', '1BBKS000.57')) %>%
