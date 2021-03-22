@@ -109,16 +109,29 @@ shinyServer(function(input, output, session) {
     # list of tibbles with benthic comparisons
     reactive_objects$DEQQAresults <- map(reactive_objects$QAanalysis, "QAdata")
     reactive_objects$EPAQAresults <- map(reactive_objects$QAanalysis, "EPAQAdata")
+    reactive_objects$DEQQAvsEPAQAresults <- map(reactive_objects$QAanalysis, "DEQQAvsEPAdata")
+    
     # tibbles of QA metric information
     reactive_objects$DEQQAmetrics <- map_df(reactive_objects$QAanalysis, "QAmetrics")
     reactive_objects$EPAQAmetrics <- map_df(reactive_objects$QAanalysis, "EPAQAmetrics")
+    reactive_objects$DEQQAvsEPAQAmetrics <- map_df(reactive_objects$QAanalysis, "DEQQAvsEPAmetrics")
+    
 
     # for data download
     reactive_objects$DEQQAresultsOUT <- reactive_objects$DEQQAresults
     reactive_objects$DEQQAresultsOUT[["QAmetrics"]] <- reactive_objects$DEQQAmetrics # add metrics df to QAresults structure
+    reactive_objects$DEQQAresultsOUT <- purrr::map(reactive_objects$DEQQAresultsOUT, ~ purrr::compact(.)) %>%
+      purrr::keep(~length(.) != 0) # only send out objects with data
+    
+    
     reactive_objects$EPAQAresultsOUT <- reactive_objects$EPAQAresults
     reactive_objects$EPAQAresultsOUT[["EPAQAmetrics"]] <- reactive_objects$EPAQAmetrics # add metrics df to QAresults structure
     reactive_objects$EPAQAresultsOUT <- purrr::map(reactive_objects$EPAQAresultsOUT, ~ purrr::compact(.)) %>%
+      purrr::keep(~length(.) != 0) # only send out objects with data
+    
+    reactive_objects$DEQQAvsEPAQAresultsOUT <- reactive_objects$DEQQAvsEPAQAresults
+    reactive_objects$DEQQAvsEPAQAresultsOUT[["DEQQAvsEPAQAmetrics"]] <- reactive_objects$DEQQAvsEPAQAmetrics # add metrics df to QAresults structure
+    reactive_objects$DEQQAvsEPAQAresultsOUT <- purrr::map(reactive_objects$DEQQAvsEPAQAresultsOUT, ~ purrr::compact(.)) %>%
       purrr::keep(~length(.) != 0) # only send out objects with data
   })
 
@@ -149,6 +162,16 @@ shinyServer(function(input, output, session) {
                                pageLength=nrow(reactive_objects$EPAQAmetrics))) %>%
       DT::formatRound(columns=c('PTD', 'PTA', "PDE", "PTC_QA", "PTC_O", "PTCabs"), digits=2)})
 
+  ## DEQ QA vs EPA metrics table
+  output$DEQQAvsEPAresults <- DT::renderDataTable({req(nrow(reactive_objects$DEQQAvsEPAQAmetrics) > 0)
+    DT::datatable(reactive_objects$DEQQAvsEPAQAmetrics,
+                  escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bift', scrollX=TRUE,
+                               scrollY = "200px", buttons=list('copy','colvis'),
+                               pageLength=nrow(reactive_objects$DEQQAvsEPAQAmetrics))) %>%
+      DT::formatRound(columns=c('PTD', 'PTA', "PDE", "PTC_QA", "PTC_O", "PTCabs"), digits=2)})
+  
+  
 
   ##### Main Panel- QA Results Tab Panel
 
@@ -157,7 +180,7 @@ shinyServer(function(input, output, session) {
 
   ## DEQ Taxa Comparison table
   
-  output$testtest <- renderPrint({reactive_objects$DEQQAresults[[input$stationSelection]]})
+  #output$testtest <- renderPrint({reactive_objects$DEQQAresults[[input$stationSelection]]})
 
   output$DEQstationLineup <- DT::renderDataTable({req(reactive_objects$DEQQAresults, input$stationSelection)
     z <- reactive_objects$DEQQAresults[[input$stationSelection]]
@@ -173,6 +196,8 @@ shinyServer(function(input, output, session) {
                   options=list(dom = 'it', scrollX=TRUE)) })
 
 
+  ## EPA Taxa Comparison table 
+  
   output$EPAstationLineup <- DT::renderDataTable({req(reactive_objects$EPAQAresults, input$stationSelection)
     z <- reactive_objects$EPAQAresults[[input$stationSelection]]
     DT::datatable(z,escape=F, rownames = F, extensions = 'Buttons',
@@ -188,6 +213,22 @@ shinyServer(function(input, output, session) {
                     options=list(dom = 'it', scrollX=TRUE)) })
     
 
+  ## DEQ QA vs EPA Taxa Comparison table 
+  
+  output$DEQQAvsEPAstationLineup <- DT::renderDataTable({req(reactive_objects$DEQQAvsEPAQAresults, input$stationSelection)
+    z <- reactive_objects$DEQQAvsEPAQAresults[[input$stationSelection]]
+    DT::datatable(z,escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'Bift', scrollX=TRUE,
+                               scrollY = "300px", buttons=list('copy','colvis'),
+                               pageLength=nrow(z)))   })
+  
+  
+  # metric results underneath sample
+  output$DEQQAvsEPAstationLineupMetrics <- DT::renderDataTable({req(nrow(reactive_objects$DEQQAvsEPAQAmetrics) > 0, input$stationSelection)
+    z <- filter(reactive_objects$DEQQAvsEPAQAmetrics, StationID %in% input$stationSelection)
+    DT::datatable(z, escape=F, rownames = F, extensions = 'Buttons',
+                  options=list(dom = 'it', scrollX=TRUE)) })
+  
 
   ##### Main Panel- Download Results Tab Panel
 
@@ -201,5 +242,9 @@ shinyServer(function(input, output, session) {
   output$downloadEPAResults <- downloadHandler(filename=function(){paste0('EPAbenthicQAresults_',Sys.Date(),'.xlsx')},
                                                content=function(file){
                                                  openxlsx::write.xlsx(reactive_objects$EPAQAresultsOUT, file = file) })
+  output$downloadDEQQAvsEPAResults <- downloadHandler(filename=function(){paste0('DEQQAvsEPAbenthicQAresults_',Sys.Date(),'.xlsx')},
+                                               content=function(file){
+                                                 openxlsx::write.xlsx(reactive_objects$DEQQAvsEPAQAresultsOUT, file = file) })
+  
 
 })

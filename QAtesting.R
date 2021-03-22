@@ -5,6 +5,8 @@ library(config)
 library(pins)
 library(lubridate)
 library(openxlsx)
+
+source('global.R')
 conn <- config::get("connectionSettings")
 
 masterTaxaGenus <- pin_get("ejones/masterTaxaGenus", board = "rsconnect") %>%
@@ -21,7 +23,7 @@ pool <- dbPool(
 
 
 # Test real data 
-realSites <- read_csv('fromRick/realData/2019 Pond QAQC.csv')#read_csv('fromRick/realData/2020QA_EVJ.csv')# %>%
+realSites <- read_csv('fromRick/realData/2019 Pond QAQC_EVJ3ways.csv')#read_csv('fromRick/realData/template (19).csv')#read_csv('fromRick/realData/2019 Pond QAQC.csv')#read_csv('fromRick/realData/2020QA_EVJ.csv')# %>%
   # for testing
   #filter(StationID %in% c('2-OTC001.54', '2-PCT002.46', '8-MPN075.84','7-FRB001.94','4ALOA000.62', '3-RAP082.43',
   #                        '4AGEO006.73', '1BBKS000.57')) %>%
@@ -78,6 +80,10 @@ DEQQAresults[['8-MPN075.84']]
 
 EPAQAresults <- map(results, "EPAQAdata")
 EPAQAmetrics <- map_df(results, "EPAQAmetrics")
+
+
+DEQQAvsEPAQAresults <- map(results, "DEQQAvsEPAdata")
+DEQQAvsEPAQAmetrics <- map_df(results, "DEQQAvsEPAmetrics")
 
 EPAQAresults[['7-RSS001.40']]
 filter(EPAQAmetrics, StationID %in% c('7-RSS001.40'))

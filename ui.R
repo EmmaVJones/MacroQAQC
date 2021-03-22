@@ -49,7 +49,10 @@ shinyUI(fluidPage(theme= "yeti.css",
                                                    DT::dataTableOutput('DEQresults'),
                                                    br(),
                                                    h4("EPA QA Results"),
-                                                   DT::dataTableOutput('EPAresults'), br(),br(),br() ),
+                                                   DT::dataTableOutput('EPAresults'),
+                                                   br(),
+                                                   h4("DEQ QA vs EPA QA Results"),
+                                                   DT::dataTableOutput('DEQQAvsEPAresults'),br(),br(),br() ),
                                           tabPanel("QA Results",
                                                    #verbatimTextOutput('testtest'),
                                                    uiOutput('stationSelectionUI'),
@@ -59,14 +62,21 @@ shinyUI(fluidPage(theme= "yeti.css",
                                                    hr(),
                                                    h4('EPA Taxa Comparison'),
                                                    DT::dataTableOutput('EPAstationLineup'),
-                                                   DT::dataTableOutput('EPAstationLineupMetrics'), br(),br(),br()),
+                                                   DT::dataTableOutput('EPAstationLineupMetrics'), 
+                                                   hr(),
+                                                   h4('DEQ QA vs EPA Taxa Comparison'),
+                                                   DT::dataTableOutput('DEQQAvsEPAstationLineup'),
+                                                   DT::dataTableOutput('DEQQAvsEPAstationLineupMetrics'),br(),br(),br()),
                                           tabPanel("Download Results",
                                                    helpText('Click the below button to download a MS Excel Workbook of all
                                                             DEQ QA metrics and QA results.'),
                                                    downloadButton('downloadDEQResults',"Download DEQ Results"),
                                                    helpText('Click the below button to download a MS Excel Workbook of all
                                                             EPA QA metrics and QA results.'),
-                                                   downloadButton('downloadEPAResults',"Download EPA Results"), br(),br(),br() )
+                                                   downloadButton('downloadEPAResults',"Download EPA Results"), 
+                                                   helpText('Click the below button to download a MS Excel Workbook of all
+                                                            DEQ QA vs EPA QA metrics and QA results.'),
+                                                   downloadButton('downloadDEQQAvsEPAResults',"Download  DEQ QA vs EPA Results"), br(),br(),br() )
                                           ))),
                              tabPanel('How To', htmlOutput("BenthicDataQAQCToolHowTo") )
                   )))     

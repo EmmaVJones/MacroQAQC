@@ -160,6 +160,7 @@ QAdataEntry <- function(realData, realSites){
     
     # Rick's desired RepNum in CEDS
     if(repToQA %in% z$RepNum){
+      print
       # Rick's desired RepNum in CEDS AND some sort of QA sample entered
       if(nrow(filter(z, RepNum > 10)) > 0 ){
         # Rick's desired RepNum in CEDS AND QA sample entered correctly
@@ -216,11 +217,11 @@ reformatForQA <- function(x, QAtype){
 
 QAsummaryMetrics <- function(x, QAsample, Sample, StationID){
   summarise(x, 
-            PTD = (1 - (sum(Agreement) / sum(QAsample))) * 100, # percent taxonomic disagreement
+            PTD = (1 - (sum(Agreement, na.rm = T) / sum(QAsample, na.rm = T))) * 100, # percent taxonomic disagreement
             PTA = 100 - PTD, # percent taxonomic agreement
-            PDE = ((sum(QAsample) - sum(Sample)) / (sum(QAsample) + sum(Sample))) *100 , # percent difference in enumeration
-            PTC_QA = (sum(PTC_QA, na.rm = T) / sum(QAsample)) * 100, #(sum((QAsample * PTCscore)/QAsample))),
-            PTC_O = (sum(PTC_O, na.rm = T) / sum(Sample)) * 100,
+            PDE = ((sum(QAsample, na.rm = T) - sum(Sample, na.rm = T)) / (sum(QAsample, na.rm = T) + sum(Sample, na.rm = T))) * 100 , # percent difference in enumeration
+            PTC_QA = (sum(PTC_QA, na.rm = T) / sum(QAsample, na.rm = T)) * 100, #(sum((QAsample * PTCscore)/QAsample))),
+            PTC_O = (sum(PTC_O, na.rm = T) / sum(Sample, na.rm = T)) * 100,
             PTCabs = abs(PTC_QA - PTC_O)) %>% # absolute difference in PTC between QA sample and Sample sample
     mutate(QAsample = !! QAsample,
            Sample = !! Sample,
@@ -257,8 +258,27 @@ QAQCmasterFunction <- function(organizedDataset){
       # fix QAdata names before returning to user
       EPAQAdata <- rename(EPAQAdata, !!EPAQAsample := QAsample,
                           !!Sample := Sample)
+      # QAoutput <- list(QAdata = QAdata,  QAmetrics = QAmetrics,
+      #                  EPAQAdata = EPAQAdata,  EPAQAmetrics = EPAQAmetrics)
+      # 
+      
+      # organize data for EPA vs DEQ QA comparison
+      DEQQAvsEPAsampleData <- dplyr::select(EPAQAsampleData, StationID:PTCscore, starts_with('EPAQAQC')) %>% 
+        filter_at(vars(starts_with('EPAQAQC')), all_vars(. > 0)) %>% #drop taxa not IDed by Pond
+        full_join(dplyr::select(QAsampleData, StationID:PTCscore, starts_with('QAQC')) %>% 
+                    filter_at(vars(starts_with('QAQC')), all_vars(. > 0)), #drop taxa not IDed by DEQ QA biologist
+                  by = c("StationID", "Order", "Family", "FinalID", "PTCscore") )
+      
+      DEQQAvsEPAdata <- reformatForQA(DEQQAvsEPAsampleData, "EPAQAQC")
+      DEQQAvsEPAmetrics <- QAsummaryMetrics(DEQQAvsEPAdata, EPAQAsample, QAsample, StationID) 
+      # fix QAdata names before returning to user
+      DEQQAvsEPAdata <- rename(DEQQAvsEPAdata, !!EPAQAsample := QAsample,
+                          !!QAsample := Sample)
       QAoutput <- list(QAdata = QAdata,  QAmetrics = QAmetrics,
-                       EPAQAdata = EPAQAdata,  EPAQAmetrics = EPAQAmetrics)
+                       EPAQAdata = EPAQAdata,  EPAQAmetrics = EPAQAmetrics,
+                       DEQQAvsEPAdata = DEQQAvsEPAdata,  DEQQAvsEPAmetrics = DEQQAvsEPAmetrics)
+      
+      
     } else {
       EPAQAdata <- reformatForQA(EPAQAsampleData, "EPAQAQC")
       EPAQAmetrics <- QAsummaryMetrics(EPAQAdata, EPAQAsample, Sample, StationID) 
