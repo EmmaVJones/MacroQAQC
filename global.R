@@ -267,8 +267,9 @@ QAQCmasterFunction <- function(organizedDataset){
         filter_at(vars(starts_with('EPAQAQC')), all_vars(. > 0)) %>% #drop taxa not IDed by Pond
         full_join(dplyr::select(QAsampleData, StationID:PTCscore, starts_with('QAQC')) %>% 
                     filter_at(vars(starts_with('QAQC')), all_vars(. > 0)), #drop taxa not IDed by DEQ QA biologist
-                  by = c("StationID", "Order", "Family", "FinalID", "PTCscore") )
-      
+                  by = c("StationID", "Order", "Family", "FinalID", "PTCscore") ) %>% 
+        mutate_if(is.numeric, ~replace_na(., 0)) # replace any NA's produced through join but only to numeric columns in case NA in a name
+
       DEQQAvsEPAdata <- reformatForQA(DEQQAvsEPAsampleData, "EPAQAQC")
       DEQQAvsEPAmetrics <- QAsummaryMetrics(DEQQAvsEPAdata, EPAQAsample, QAsample, StationID) 
       # fix QAdata names before returning to user
