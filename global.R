@@ -1,3 +1,5 @@
+httr::set_config(httr::config(ssl_verifypeer = FALSE, ssl_verifyhost = FALSE))
+
 library(tidyverse)
 library(shiny)
 library(pool)
@@ -5,6 +7,7 @@ library(config)
 library(pins)
 library(lubridate)
 library(openxlsx)
+library(dbplyr)
 
 # get configuration settings
 conn <- config::get("connectionSettings")
@@ -67,7 +70,7 @@ queryPreCheck <- function(poolName, rickInputDF){
   
   # Test query
   if(nrow(querySites) > 0){
-    benSamps <- poolName %>% tbl("Edas_Benthic_Sample_View") %>%
+    benSamps <- poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
       filter(STA_ID %in% !! toupper(querySites$StationID) &
                FDT_DATE_TIME %in% !! querySites$`Collection Date` &
                WBS_REP_NUM %in% !! querySites$RepNum) %>%
@@ -86,7 +89,7 @@ queryPreCheck <- function(poolName, rickInputDF){
 
 # Pull CEDS data
 pullQAQCsample <- function(poolName, rickInputDF){
-  benSamps <- poolName %>% tbl("Edas_Benthic_Sample_View") %>%
+  benSamps <- poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
     filter(STA_ID %in% !! toupper(rickInputDF$StationID) &
              FDT_DATE_TIME %in% !! rickInputDF$`Collection Date`) %>%
     as_tibble() %>%
@@ -116,7 +119,7 @@ pullQAQCsample <- function(poolName, rickInputDF){
   
   if(nrow(benSamps) > 0){
     return(
-      poolName %>% tbl("Edas_Benthic_View") %>%
+      poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_View")) %>%
         filter(WBS_SAMP_ID %in% !! toupper(benSamps$BenSampID)) %>%
         as_tibble() %>%
         rename( "StationID" = "STA_ID",
