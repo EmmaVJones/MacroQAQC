@@ -108,7 +108,7 @@ reformatForQA <- function(x, QAtype){
 
 QAsummaryMetrics <- function(x, QAsample, Sample, StationID){
   summarise(x, 
-            PTD = (1 - (sum(Agreement) / sum(QAsample))) * 100, # percent taxonomic disagreement
+            PTD = (1 - (sum(Agreement) / max( sum(QAsample), sum(Sample)) ) ) * 100, # percent taxonomic disagreement # 
             PTA = 100 - PTD, # percent taxonomic agreement
             PDE = ((sum(QAsample) - sum(Sample)) / (sum(QAsample) + sum(Sample))) *100 , # percent difference in enumeration
             PTC_QA = (sum(PTC_QA, na.rm = T) / sum(QAsample)) * 100, #(sum((QAsample * PTCscore)/QAsample))),

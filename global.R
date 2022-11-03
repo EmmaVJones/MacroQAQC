@@ -220,7 +220,7 @@ reformatForQA <- function(x, QAtype){
 
 QAsummaryMetrics <- function(x, QAsample, Sample, StationID){
   summarise(x, 
-            PTD = (1 - (sum(Agreement, na.rm = T) / sum(QAsample, na.rm = T))) * 100, # percent taxonomic disagreement
+            PTD = (1 - (sum(Agreement, na.rm = T) / max( sum(QAsample, na.rm = T), sum(Sample, na.rm = T) ))) * 100, # percent taxonomic disagreement
             PTA = 100 - PTD, # percent taxonomic agreement
             PDE = ((sum(QAsample, na.rm = T) - sum(Sample, na.rm = T)) / (sum(QAsample, na.rm = T) + sum(Sample, na.rm = T))) * 100 , # percent difference in enumeration
             PTC_QA = (sum(PTC_QA, na.rm = T) / sum(QAsample, na.rm = T)) * 100, #(sum((QAsample * PTCscore)/QAsample))),
@@ -301,16 +301,41 @@ QAQCmasterFunction_df <- function(x, # pulled benthic data
                                   masterTaxaGenus){
   out <- list()
   for(i in unique(x$StationID)){
-    print(i)
-    x1 <- organizeTaxaLists(filter(x, StationID %in% i), masterTaxaGenus) 
-    if(ncol(x1) > 6){
-      out[[i]] <- QAQCmasterFunction(x1)
-    } else { # means no QA data yet
-      out[[i]] <- list(QAdata = x1,
-                       QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
-                         slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
-                         dplyr::select(StationID, QAsample, Sample, everything()) )
+    # catch in case >1 sample event per station in input
+    sampleEvents <- filter(x, StationID %in% i) %>% 
+      group_by(StationID, `Collection Date`) %>% 
+      summarize()
+    
+    if(nrow(sampleEvents) > 1){
+      for( k in as.character(unique(sampleEvents$`Collection Date`))){
+        newName <- paste(i, gsub(":", "", k)) # have to take out : or Excel will not write sheet names properly upon download
+        print(newName)
+        x1 <- organizeTaxaLists(filter(x, StationID %in% i &
+                                       `Collection Date` %in% as.POSIXct(k, tz = 'UTC')), masterTaxaGenus) 
+        if(ncol(x1) > 6){
+          out[[newName]] <- QAQCmasterFunction(x1)
+        } else { # means no QA data yet
+          out[[newName]] <- list(QAdata = x1,
+                           QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
+                             slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
+                             dplyr::select(StationID, QAsample, Sample, everything()) )
+        }
+      }
+      
+      
+    } else {
+      print(i)
+      x1 <- organizeTaxaLists(filter(x, StationID %in% i), masterTaxaGenus) 
+      if(ncol(x1) > 6){
+        out[[i]] <- QAQCmasterFunction(x1)
+      } else { # means no QA data yet
+        out[[i]] <- list(QAdata = x1,
+                         QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
+                           slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
+                           dplyr::select(StationID, QAsample, Sample, everything()) )
+      }
     }
+    
     
   }
   return(out)
