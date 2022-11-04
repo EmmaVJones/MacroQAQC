@@ -26,7 +26,7 @@ board_register_rsconnect(key = conn$CONNECT_API_KEY,  #Sys.getenv("CONNECT_API_K
 #  trusted_connection = "yes"
 # )
 
-# Set up pool connection to production environment
+# # Set up pool connection to production environment
 pool <- dbPool(
   drv = odbc::odbc(),
   Driver = "SQLServer",   # note the LACK OF space between SQL and Server ( how RStudio named driver)
@@ -57,41 +57,45 @@ template <- read_csv('data/template.csv')
 # Necessary Functions
 
 # identify data issues before proceeding to full query
-queryPreCheck <- function(poolName, rickInputDF){
+queryPreCheck <- function(pool, inputStations){
   # first make sure datetime correct
-  dateIssues <- filter(rickInputDF, str_detect(`Collection Date`, '-')) %>% # find dates in - format not /
+  dateIssues <- filter(inputStations, str_detect(`Collection Date`, '-')) %>% # find dates in - format not /
     mutate(`Potential Issue` = 'Date uses - not / as separator')
-  timeIssues <- filter(rickInputDF, str_detect(`Collection Date`, ':', negate = TRUE)) %>% # find times without :
+  timeIssues <- filter(inputStations, str_detect(`Collection Date`, ':', negate = TRUE)) %>% # find times without :
     mutate(`Potential Issue` = 'Time does not have appropriate separator ( : )')
+  methodIssues <- filter(inputStations, ! Gradient %in% c('Riffle', 'Boatable', 'MACS')) %>% # find inappropriate method in input
+    mutate(`Potential Issue` = 'Gradient is not correct. Must be one of: Riffle, Boatable, MACS')
   
   # remove sites with known issues
-  querySites <- filter(rickInputDF, ! StationID %in% dateIssues$StationID) %>%
+  querySites <- filter(inputStations, ! StationID %in% dateIssues$StationID) %>%
     filter( ! StationID %in% timeIssues$StationID)
   
   # Test query
   if(nrow(querySites) > 0){
-    benSamps <- poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
+    benSamps <- pool %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
       filter(STA_ID %in% !! toupper(querySites$StationID) &
                FDT_DATE_TIME %in% !! querySites$`Collection Date` &
-               WBS_REP_NUM %in% !! querySites$RepNum) %>%
+               WBS_REP_NUM %in% !! querySites$RepNum & 
+               WBCM_DESCRIPTION %in% !! querySites$Gradient) %>%
       as_tibble()
     
     # make sure all stations that were supposed to return data do
     missingData <- filter(querySites, ! StationID %in% benSamps$STA_ID) %>%
-      mutate(`Potential Issue` = 'No data in CEDS with the StationID, Collection Date/Time, and RepNum combination')
+      mutate(`Potential Issue` = 'No data in CEDS with the StationID, Collection Date/Time, Gradient, and RepNum combination')
     
-    return(bind_rows(dateIssues, timeIssues) %>%
+    return(bind_rows(dateIssues, timeIssues, methodIssues) %>%
              bind_rows(missingData))
     
-  } else { return(bind_rows(dateIssues, timeIssues)) }
+  } else { return(bind_rows(dateIssues, timeIssues, methodIssues)) }
   
 }
 
 # Pull CEDS data
-pullQAQCsample <- function(poolName, rickInputDF){
-  benSamps <- poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
-    filter(STA_ID %in% !! toupper(rickInputDF$StationID) &
-             FDT_DATE_TIME %in% !! rickInputDF$`Collection Date`) %>%
+pullQAQCsample <- function(pool, inputStations){
+  benSamps <- pool %>% tbl(in_schema("wqm",  "Edas_Benthic_Sample_View")) %>%
+    filter(STA_ID %in% !! toupper(inputStations$StationID) &
+             FDT_DATE_TIME %in% !! inputStations$`Collection Date` & 
+             WBCM_DESCRIPTION %in% !! inputStations$Gradient) %>%
     as_tibble() %>%
     # fix names
     rename( "StationID" = "STA_ID",
@@ -119,12 +123,13 @@ pullQAQCsample <- function(poolName, rickInputDF){
   
   if(nrow(benSamps) > 0){
     return(
-      poolName %>% tbl(in_schema("wqm",  "Edas_Benthic_View")) %>%
+      pool %>% tbl(in_schema("wqm",  "Edas_Benthic_View")) %>%
         filter(WBS_SAMP_ID %in% !! toupper(benSamps$BenSampID)) %>%
         as_tibble() %>%
         rename( "StationID" = "STA_ID",
                 "BenSampID"  = "WBS_SAMP_ID",
                 "RepNum" = "WBS_REP_NUM",
+                "Gradient" = "WBCM_DESCRIPTION",
                 "FinalID" = "WBMT_FINAL_ID",
                 "Individuals" = "WBE_INDIVIDUALS",
                 "ID Comments" = "WBE_COMMENT",
@@ -132,38 +137,39 @@ pullQAQCsample <- function(poolName, rickInputDF){
                 "Taxonomist" = "TAXONOMIST_NAME",  # not in EDAS table but good info
                 "Entered Date" = "WBE_INSERTED_DATE") %>%
         mutate(`Excluded Taxa` = ifelse(WBE_EXCLUDED_TAXA_YN == "Y", -1, 0)) %>%
-        dplyr::select(StationID, BenSampID, RepNum, FinalID, Individuals, 
+        dplyr::select(StationID, BenSampID, RepNum, Gradient, FinalID, Individuals, 
                       `Excluded Taxa`, `ID Comments`, Taxonomist, `Entered By`, `Entered Date`) %>%
         # add in benSamp info to only return one dataset
-        left_join(benSamps, by = c("StationID", "BenSampID", "RepNum", "Taxonomist")) %>% # enter date and enter by caused join issues so drop
+        left_join(benSamps, by = c("StationID", "BenSampID", "RepNum", "Gradient", "Taxonomist")) %>% # enter date and enter by caused join issues so drop
         dplyr::select(-starts_with('Entered')) %>%
         arrange(StationID, BenSampID))
   } else {
     return(
-      tibble(StationID = as.character(NA), BenSampID = as.character(NA), RepNum = as.numeric(NA),
+      tibble(StationID = as.character(NA), BenSampID = as.character(NA), RepNum = as.numeric(NA), Gradient = as.character(NA), 
              FinalID = as.character(NA), Individuals = as.numeric(NA), `Excluded Taxa` = as.numeric(NA),
              `ID Comments` = as.character(NA), Taxonomist = as.character(NA), `Collection Date` = as.POSIXct(NA), 
              `Sample Comments` = as.character(NA),`Collected By` = as.character(NA), `Field Team` = as.character(NA), 
-             Gradient = as.character(NA), `Target Count` = as.numeric(NA),  Season = as.character(NA)) )
+             `Target Count` = as.numeric(NA),  Season = as.character(NA)) )
   }
 }
 
 
 # double check data is correctly entered in CEDS before doing QA
-QAdataEntry <- function(realData, realSites){
+QAdataEntry <- function(preliminaryBenthics, inputStations){
   
-  dataOut <- realData[0,]
+  dataOut <- preliminaryBenthics[0,]
   problemDataOut <- tibble(StationID = NA, Problem = NA)
   
   # now get appropriate samples based on Rick's Rep Number and anything with a rep num > 10
-  for(i in unique(realSites$StationID)){
-    print(i)
-    z <- filter(realData, StationID == i) 
-    repToQA <- filter(realSites, StationID == i)$RepNum
+  for(i in 1:nrow(inputStations)){
+    print(paste(inputStations$StationID[i], inputStations$`Collection Date`[i], inputStations$RepNum[i], inputStations$Gradient[i]))
+    z <- filter(preliminaryBenthics, StationID == inputStations$StationID[i] &
+                  `Collection Date` == as.POSIXct(inputStations$`Collection Date`[i],format = "%m/%d/%Y %H:%M", tz = 'UTC') &
+                  Gradient == inputStations$Gradient[i]) 
+    repToQA <- as.numeric(inputStations$RepNum[i])#filter(inputStations, StationID == i)$RepNum
     
     # Rick's desired RepNum in CEDS
     if(repToQA %in% z$RepNum){
-      print
       # Rick's desired RepNum in CEDS AND some sort of QA sample entered
       if(nrow(filter(z, RepNum > 10)) > 0 ){
         # Rick's desired RepNum in CEDS AND QA sample entered correctly
@@ -172,15 +178,15 @@ QAdataEntry <- function(realData, realSites){
           dataPasses <- filter(z, RepNum %in% repToQA | RepNum > 10)
           problemData <- tibble(StationID = NA, Problem = NA)
         } else {
-          dataPasses <- realData[0,]
+          dataPasses <- preliminaryBenthics[0,]
           problemData <- tibble(StationID = unique(z$StationID),
                                 Problem = 'QA RepNum incorrectly entered') }
       } else {    # Rick's desired RepNum in CEDS but no QA sample (determined by RepNum > 10) in CEDS
-        dataPasses <- realData[0,]
+        dataPasses <- preliminaryBenthics[0,]
         problemData <- tibble(StationID = unique(z$StationID),
-                              Problem = 'No data with RepNum > 10, QA RepNum data either incorrectly entered or not entered at all') }
+                              Problem = 'No data with RepNum > 10, QA RepNum or Method data either incorrectly entered or not entered at all') }
     } else { # Rick's desired RepNum NOT in CEDS
-      dataPasses <- realData[0,]
+      dataPasses <- preliminaryBenthics[0,]
       problemData <- tibble(StationID = unique(z$StationID),
                             Problem = 'No data for desired RepNum in CEDS')   }
     
@@ -297,46 +303,55 @@ QAQCmasterFunction <- function(organizedDataset){
 }
 
 # How to repeat for each sample
-QAQCmasterFunction_df <- function(x, # pulled benthic data
+QAQCmasterFunction_df <- function(inputStations,
+                                  benthics, # pulled benthic data
                                   masterTaxaGenus){
   out <- list()
-  for(i in unique(x$StationID)){
+  for(i in 1:nrow(inputStations)){
     # catch in case >1 sample event per station in input
-    sampleEvents <- filter(x, StationID %in% i) %>% 
-      group_by(StationID, `Collection Date`) %>% 
-      summarize()
-    
-    if(nrow(sampleEvents) > 1){
-      for( k in as.character(unique(sampleEvents$`Collection Date`))){
-        newName <- paste(i, gsub(":", "", k)) # have to take out : or Excel will not write sheet names properly upon download
-        print(newName)
-        x1 <- organizeTaxaLists(filter(x, StationID %in% i &
-                                       `Collection Date` %in% as.POSIXct(k, tz = 'UTC')), masterTaxaGenus) 
-        if(ncol(x1) > 6){
-          out[[newName]] <- QAQCmasterFunction(x1)
-        } else { # means no QA data yet
-          out[[newName]] <- list(QAdata = x1,
-                           QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
-                             slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
-                             dplyr::select(StationID, QAsample, Sample, everything()) )
-        }
-      }
+    # sampleEvents <- filter(benthics, StationID %in% i) %>% 
+    #   group_by(StationID, `Collection Date`) %>% 
+    #   summarize()
+    # 
+    # if(nrow(sampleEvents) > 1){
+    #   for( k in as.character(unique(sampleEvents$`Collection Date`))){
+    #     newName <- paste(i, gsub(":", "", k)) # have to take out : or Excel will not write sheet names properly upon download
+    #     print(newName)
+    #     benthics1 <- organizeTaxaLists(filter(benthics, StationID %in% i &
+    #                                    `Collection Date` %in% as.POSIXct(k, tz = 'UTC')), masterTaxaGenus) 
+    #     if(ncol(benthics1) > 6){
+    #       out[[newName]] <- QAQCmasterFunction(benthics1)
+    #     } else { # means no QA data yet
+    #       out[[newName]] <- list(QAdata = benthics1,
+    #                        QAmetrics = dplyr::select(benthics, StationID, Sample = BenSampID) %>%
+    #                          slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
+    #                          dplyr::select(StationID, QAsample, Sample, everything()) )
+    #     }
+    #   }
+    #   
+    #   
+    # } else {
       
-      
-    } else {
-      print(i)
-      x1 <- organizeTaxaLists(filter(x, StationID %in% i), masterTaxaGenus) 
-      if(ncol(x1) > 6){
-        out[[i]] <- QAQCmasterFunction(x1)
+      benthics1 <- organizeTaxaLists(filter(benthics, StationID == inputStations$StationID[i] &
+                                              `Collection Date` == as.POSIXct(inputStations$`Collection Date`[i],format = "%m/%d/%Y %H:%M", tz = 'UTC') &
+                                              Gradient == inputStations$Gradient[i]), 
+                                     masterTaxaGenus) 
+      newName <- paste(inputStations$StationID[i], 
+                       gsub(":", "", inputStations$`Collection Date`[i]), # have to take out : or Excel will not write sheet names properly upon download
+                       inputStations$Gradient[i])
+                      #substr(inputStations$Gradient[i], 1,3)) # first letters bc name can get too long for Excel
+      print(newName)
+      if(ncol(benthics1) > 6){
+        out[[newName]] <- QAQCmasterFunction(benthics1)
       } else { # means no QA data yet
-        out[[i]] <- list(QAdata = x1,
-                         QAmetrics = dplyr::select(x, StationID, Sample = BenSampID) %>%
+        out[[newName]] <- list(QAdata = benthics1,
+                         QAmetrics = dplyr::select(benthics, StationID, Sample = BenSampID) %>%
                            slice(1) %>% mutate(QAsample = NA, PTD = NA, PTA = NA, PDE = NA, PTC_QA = NA, PTC_O = NA, PTCabs= NA) %>%
                            dplyr::select(StationID, QAsample, Sample, everything()) )
       }
     }
     
     
-  }
+  #}
   return(out)
 }

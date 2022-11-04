@@ -5,18 +5,23 @@ masterTaxaGenus <- pin_get("ejones/masterTaxaGenus", board = "rsconnect") %>%
 
 
 inputStations <- read_csv('data/2021_QAQC_RConnect_breakEVJ.csv') %>% #read_csv('data/template.csv')
-  filter(StationID == '2-JKS006.67')
+  filter(StationID %in% c('2-JKS006.67') ) 
+# inputStations[1,]<- c('2-JKS006.67', '8/24/2021 9:50', 1, 'Riffle' )
+# inputStations[2,]<- c('2-JKS006.67', '8/24/2021 9:50', 1, 'Boatable' )
+
 
 queryPreCheck(pool, inputStations) %>% arrange(StationID)
 
 preliminaryBenthics <- pullQAQCsample(pool, inputStations) %>% arrange(StationID)
+# preliminaryBenthics <- read_csv('data/boatableTest.csv') %>% 
+#   mutate(`Sample Comments` = as.character(`Sample Comments`))
 
 CEDSdataIssues <- QAdataEntry(preliminaryBenthics, inputStations)
 
 #benthicDataForQA
 benthics <- CEDSdataIssues$cleanData %>% arrange(StationID)
 
-QAanalysis <- QAQCmasterFunction_df(benthics, masterTaxaGenus)
+QAanalysis <- QAQCmasterFunction_df(inputStations, benthics, masterTaxaGenus)
 
 
 
@@ -37,6 +42,7 @@ DEQQAresultsOUT[["QAmetrics"]] <- DEQQAmetrics # add metrics df to QAresults str
 DEQQAresultsOUT <- purrr::map(DEQQAresultsOUT, ~ purrr::compact(.)) %>%
   purrr::keep(~length(.) != 0) # only send out objects with data
 
+names(DEQQAresultsOUT) <- sub(" .*", "",  names(DEQQAresultsOUT)) # shorten names for Excel output
 
 openxlsx::write.xlsx(DEQQAresultsOUT, file = paste0('DEQbenthicQAresults_',Sys.Date(),'.xlsx'))
 

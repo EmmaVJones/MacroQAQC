@@ -105,7 +105,7 @@ shinyServer(function(input, output, session) {
       pivot_wider(names_from = Type, values_from = BenSampID)
 
     ## QA results
-    reactive_objects$QAanalysis <- QAQCmasterFunction_df(reactive_objects$benthics, reactive_objects$masterTaxaGenus)
+    reactive_objects$QAanalysis <- QAQCmasterFunction_df(inputStations(),reactive_objects$benthics, reactive_objects$masterTaxaGenus)
     # list of tibbles with benthic comparisons
     reactive_objects$DEQQAresults <- map(reactive_objects$QAanalysis, "QAdata")
     reactive_objects$EPAQAresults <- map(reactive_objects$QAanalysis, "EPAQAdata")
@@ -122,17 +122,20 @@ shinyServer(function(input, output, session) {
     reactive_objects$DEQQAresultsOUT[["QAmetrics"]] <- reactive_objects$DEQQAmetrics # add metrics df to QAresults structure
     reactive_objects$DEQQAresultsOUT <- purrr::map(reactive_objects$DEQQAresultsOUT, ~ purrr::compact(.)) %>%
       purrr::keep(~length(.) != 0) # only send out objects with data
-    
+    names(reactive_objects$DEQQAresultsOUT) <- sub(" .*", "",  names(reactive_objects$DEQQAresultsOUT))# shorten names for Excel
     
     reactive_objects$EPAQAresultsOUT <- reactive_objects$EPAQAresults
     reactive_objects$EPAQAresultsOUT[["EPAQAmetrics"]] <- reactive_objects$EPAQAmetrics # add metrics df to QAresults structure
     reactive_objects$EPAQAresultsOUT <- purrr::map(reactive_objects$EPAQAresultsOUT, ~ purrr::compact(.)) %>%
       purrr::keep(~length(.) != 0) # only send out objects with data
+    names(reactive_objects$EPAQAresultsOUT) <- sub(" .*", "",  names(reactive_objects$EPAQAresultsOUT))# shorten names for Excel
     
     reactive_objects$DEQQAvsEPAQAresultsOUT <- reactive_objects$DEQQAvsEPAQAresults
     reactive_objects$DEQQAvsEPAQAresultsOUT[["DEQQAvsEPAQAmetrics"]] <- reactive_objects$DEQQAvsEPAQAmetrics # add metrics df to QAresults structure
     reactive_objects$DEQQAvsEPAQAresultsOUT <- purrr::map(reactive_objects$DEQQAvsEPAQAresultsOUT, ~ purrr::compact(.)) %>%
       purrr::keep(~length(.) != 0) # only send out objects with data
+    names(reactive_objects$DEQQAvsEPAQAresultsOUT) <- sub(" .*", "",  names(reactive_objects$DEQQAvsEPAQAresultsOUT))# shorten names for Excel
+    
   })
 
   

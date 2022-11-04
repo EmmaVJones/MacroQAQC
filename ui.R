@@ -10,6 +10,7 @@ shinyUI(fluidPage(theme= "yeti.css",
                                                  the uploaded spreadsheet. CEDS data is refreshed nightly."),
                                         fileInput("inputStations", "Stations for QAQC", accept = ".csv"),
                                         br(),
+                                        h4(strong('Note: Template updated November 2022! Please download a new template version in order to use app.')),
                                         downloadButton('downloadTemplate',"Download template.csv"),
                                         width = 3),
                                       mainPanel(
